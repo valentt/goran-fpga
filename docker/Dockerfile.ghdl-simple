@@ -1,0 +1,86 @@
+# Build ONLY patched GHDL binary
+# This is a multi-stage build:
+# Stage 1: Build patched GHDL from source
+# Stage 2: Use oss-cad-suite and replace GHDL binary
+#
+# Build: docker build -f Dockerfile.ghdl-simple -t ghdl-patched .
+
+# ============== Stage 1: Build GHDL ==============
+FROM debian:bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    make \
+    gnat \
+    gcc \
+    g++ \
+    zlib1g-dev \
+    llvm-14 \
+    llvm-14-dev \
+    clang-14 \
+    patch \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/clang++-14 /usr/bin/clang++ \
+    && ln -s /usr/bin/clang-14 /usr/bin/clang
+
+# Clone GHDL
+WORKDIR /build
+RUN git clone --depth 1 https://github.com/ghdl/ghdl.git
+
+# Apply the relaxed locally static patch using sed with extended regex
+# The patch adds "and then not Flag_Relaxed_Rules" to the locally static check
+RUN cd ghdl/src/vhdl && \
+    sed -i '/if Choice_Staticness \/= Locally/,/and then Is_Case_Stmt/{s/and then Is_Case_Stmt/and then Is_Case_Stmt\n                    and then not Flag_Relaxed_Rules/}' vhdl-sem_expr.adb && \
+    echo "=== Patch verification ===" && \
+    grep -A3 "if Choice_Staticness /= Locally" vhdl-sem_expr.adb | head -10
+
+# Build GHDL with LLVM backend
+WORKDIR /build/ghdl
+RUN ./configure --with-llvm-config=llvm-config-14 --prefix=/opt/ghdl && \
+    make -j$(nproc) && \
+    make install
+
+# ============== Stage 2: Use oss-cad-suite ==============
+FROM debian:bookworm-slim
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    git \
+    make \
+    xz-utils \
+    ca-certificates \
+    libftdi1-2 \
+    libllvm14 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and extract oss-cad-suite
+WORKDIR /opt
+RUN wget -q https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2024-12-17/oss-cad-suite-linux-x64-20241217.tgz \
+    && tar -xzf oss-cad-suite-linux-x64-20241217.tgz \
+    && rm oss-cad-suite-linux-x64-20241217.tgz
+
+# Copy patched GHDL from builder stage, replacing oss-cad-suite GHDL
+COPY --from=builder /opt/ghdl /opt/ghdl-patched
+
+# Replace GHDL binaries in oss-cad-suite with patched versions
+RUN cp -f /opt/ghdl-patched/bin/ghdl /opt/oss-cad-suite/bin/ && \
+    cp -f /opt/ghdl-patched/bin/ghdl1-llvm /opt/oss-cad-suite/libexec/ 2>/dev/null || true && \
+    cp -rf /opt/ghdl-patched/lib/ghdl /opt/oss-cad-suite/lib/ 2>/dev/null || true
+
+# Set PATH
+ENV PATH="/opt/oss-cad-suite/bin:${PATH}"
+
+# Create workspace
+WORKDIR /workspace
+
+# Verify tools
+RUN echo "=== Tool Versions (Patched) ===" && \
+    ghdl --version && \
+    yosys --version && \
+    nextpnr-ecp5 --version && \
+    ecppack --version
+
+CMD ["/bin/bash"]

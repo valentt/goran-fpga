@@ -1,0 +1,26 @@
+# Build artifacts
+*.json
+*.config
+*.bit
+*.svf
+
+# Temporary files
+nul
+*.log
+*.tmp
+
+# Output directory
+output/
+
+# Data directory (RAG storage)
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

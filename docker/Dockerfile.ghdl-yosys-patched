@@ -1,0 +1,52 @@
+# Extend hdlc/ghdl:yosys with locally static patch
+# This rebuilds GHDL in-place with relaxed locally static checking
+# Keeps the same version so ghdl-yosys-plugin stays compatible
+#
+# Build: docker build -f Dockerfile.ghdl-yosys-patched -t ghdl-yosys-patched .
+
+FROM hdlc/ghdl:yosys
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    make \
+    gnat \
+    gcc \
+    g++ \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Show original GHDL version
+RUN echo "=== Original GHDL ===" && ghdl --version | head -3
+
+# Clone exact GHDL version from base image (5.0.0-dev = v4.1.0-138-ga00b7833f)
+WORKDIR /build
+RUN git clone https://github.com/ghdl/ghdl.git && \
+    cd ghdl && git checkout a00b7833f
+
+# Apply the relaxed locally static patch
+RUN cd ghdl/src/vhdl && \
+    sed -i 's/if Choice_Staticness \/= Locally$/if Choice_Staticness \/= Locally\n                    and then not Flag_Relaxed_Rules/' vhdl-sem_expr.adb && \
+    echo "=== Patch applied ===" && \
+    grep -A1 "Choice_Staticness /= Locally" vhdl-sem_expr.adb | head -4
+
+# Build GHDL with mcode backend (to match base image)
+# Install to /usr/local which is in PATH before /usr
+WORKDIR /build/ghdl
+RUN ./configure --prefix=/usr/local && \
+    make -j$(nproc) && \
+    make install
+
+# Also need to replace libghdl in the location the plugin expects
+RUN cp /usr/local/lib/libghdl-5_0_0_dev.so /usr/local/lib/libghdl-5_0_0_dev.so.patched && \
+    cp /usr/local/lib/libghdl-5_0_0_dev.so.patched /usr/local/lib/libghdl-5_0_0_dev.so
+
+# Verify the new GHDL works
+RUN echo "=== GHDL Patched Version ===" && \
+    /usr/local/bin/ghdl --version | head -3
+
+# Update PATH to use patched GHDL first
+ENV PATH="/usr/local/bin:${PATH}"
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

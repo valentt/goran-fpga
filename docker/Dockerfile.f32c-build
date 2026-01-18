@@ -1,0 +1,47 @@
+# f32c Open-Source FPGA Build Environment
+# Includes: GHDL (patched), Yosys, ghdl-yosys-plugin, nextpnr-ecp5, ecppack
+#
+# Build: docker build -f Dockerfile.f32c-build -t f32c-build .
+# Run:   docker run -it -v $(pwd):/workspace f32c-build
+
+FROM hdlc/ghdl:yosys AS ghdl-patched
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    make \
+    gnat \
+    gcc \
+    g++ \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone exact GHDL version from base image (5.0.0-dev = v4.1.0-138-ga00b7833f)
+WORKDIR /build
+RUN git clone https://github.com/ghdl/ghdl.git && \
+    cd ghdl && git checkout a00b7833f
+
+# Apply the relaxed locally static patch for f32c compatibility
+RUN cd ghdl/src/vhdl && \
+    sed -i 's/if Choice_Staticness \/= Locally$/if Choice_Staticness \/= Locally\n                    and then not Flag_Relaxed_Rules/' vhdl-sem_expr.adb
+
+# Build GHDL with mcode backend
+WORKDIR /build/ghdl
+RUN ./configure --prefix=/usr/local && \
+    make -j$(nproc) && \
+    make install
+
+ENV PATH="/usr/local/bin:${PATH}"
+
+# Final image with nextpnr-ecp5
+FROM ghdl-patched
+
+# Install nextpnr-ecp5 and prjtrellis (ecppack)
+RUN apt-get update && apt-get install -y \
+    nextpnr-ecp5 \
+    prjtrellis \
+    fujprog \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

@@ -1,0 +1,12 @@
+--- a/src/vhdl/vhdl-sem_expr.adb
++++ b/src/vhdl/vhdl-sem_expr.adb
+@@ -3088,6 +3088,7 @@ package body Vhdl.Sem_Expr is
+               if Sem_Simple_Choice then
+                  Choice_Staticness := Get_Choice_Staticness (El);
+                  Staticness := Min (Staticness, Choice_Staticness);
+                  if Choice_Staticness /= Locally
+                    and then Is_Case_Stmt
++                   and then not Flag_Relaxed_Rules
+                  then
+                     --  FIXME: explain why
+                     Error_Msg_Sem (+El, "choice is not locally static");

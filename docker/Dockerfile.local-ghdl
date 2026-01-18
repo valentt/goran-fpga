@@ -1,0 +1,69 @@
+# Build GHDL from local (already patched) source
+# Uses the ghdl-source folder which has our patch applied
+#
+# Build from goran-fpga root:
+#   docker build -f docker/Dockerfile.local-ghdl -t f32c-patched .
+
+# ============== Stage 1: Build GHDL ==============
+FROM debian:bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    make \
+    gnat \
+    gcc \
+    g++ \
+    zlib1g-dev \
+    llvm-14 \
+    llvm-14-dev \
+    clang-14 \
+    dos2unix \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/bin/clang++-14 /usr/bin/clang++ \
+    && ln -s /usr/bin/clang-14 /usr/bin/clang
+
+# Copy already-patched GHDL source
+WORKDIR /build
+COPY projects/ghdl-source /build/ghdl
+
+# Verify patch is present, fix line endings, and build
+WORKDIR /build/ghdl
+RUN grep -A2 "and then not Flag_Relaxed_Rules" /build/ghdl/src/vhdl/vhdl-sem_expr.adb && \
+    echo "=== PATCH VERIFIED ===" && \
+    find /build/ghdl -type f \( -name "*.sh" -o -name "configure" -o -name "Makefile*" \) -exec dos2unix {} \; && \
+    ./configure --with-llvm-config=llvm-config-14 --prefix=/opt/ghdl && \
+    make -j$(nproc) && \
+    make install
+
+# ============== Stage 2: Final image ==============
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y \
+    wget curl git make xz-utils ca-certificates libftdi1-2 libllvm14 libgnat-12 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN wget -q https://github.com/YosysHQ/oss-cad-suite-build/releases/download/2024-12-17/oss-cad-suite-linux-x64-20241217.tgz \
+    && tar -xzf oss-cad-suite-linux-x64-20241217.tgz \
+    && rm oss-cad-suite-linux-x64-20241217.tgz
+
+# Copy patched GHDL
+COPY --from=builder /opt/ghdl /opt/ghdl-patched
+
+# Replace GHDL in oss-cad-suite
+# Strategy: Replace binaries and create symlinks for libghdl so existing ghdl.so plugin works
+RUN cp -f /opt/ghdl-patched/bin/ghdl /opt/oss-cad-suite/bin/ && \
+    cp -f /opt/ghdl-patched/bin/ghdl1-llvm /opt/oss-cad-suite/libexec/ 2>/dev/null || true && \
+    cp -rf /opt/ghdl-patched/lib/ghdl /opt/oss-cad-suite/lib/ && \
+    # Copy new libghdl and create symlink from old name
+    cp -f /opt/ghdl-patched/lib/libghdl-6_0_0_dev.so /opt/oss-cad-suite/lib/ && \
+    ln -sf libghdl-6_0_0_dev.so /opt/oss-cad-suite/lib/libghdl-5_0_0_dev.so
+
+ENV PATH="/opt/oss-cad-suite/bin:${PATH}"
+WORKDIR /workspace
+
+RUN echo "=== Patched GHDL ===" && ghdl --version && \
+    echo "=== Testing Yosys GHDL plugin ===" && \
+    yosys -m ghdl -p "ghdl --version" 2>&1 || echo "Plugin test may have warnings"
+
+CMD ["/bin/bash"]

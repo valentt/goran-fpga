@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  fpga-build:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: f32c-build:latest
+    container_name: f32c-build
+    volumes:
+      - ../projects/f32c-valent:/workspace/f32c:rw
+    working_dir: /workspace/f32c/rtl/proj/lattice/ulx3s/bram_trellis
+    stdin_open: true
+    tty: true

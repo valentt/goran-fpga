@@ -1,0 +1,73 @@
+# Build GHDL with mcode backend + relaxed locally static patch
+# mcode backend is more stable than LLVM for synthesis
+#
+# Build: docker build -f Dockerfile.ghdl-mcode-patched -t ghdl-mcode-patched .
+
+FROM debian:bookworm
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    make \
+    gnat \
+    gcc \
+    g++ \
+    zlib1g-dev \
+    wget \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clone GHDL - use stable branch
+WORKDIR /build
+RUN git clone --depth 1 --branch v4.1.0 https://github.com/ghdl/ghdl.git
+
+# Apply the relaxed locally static patch
+# This allows function calls in case choices when -frelaxed-rules is used
+RUN cd ghdl/src/vhdl && \
+    sed -i 's/if Choice_Staticness \/= Locally$/if Choice_Staticness \/= Locally\n                    and then not Flag_Relaxed_Rules/' vhdl-sem_expr.adb
+
+# Build GHDL with mcode backend (more stable for synthesis)
+WORKDIR /build/ghdl
+RUN ./configure --prefix=/opt/ghdl && \
+    make -j$(nproc) && \
+    make install
+
+# Install Yosys with development headers
+RUN apt-get update && apt-get install -y \
+    yosys \
+    yosys-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install ghdl-yosys-plugin
+WORKDIR /build
+RUN git clone --depth 1 https://github.com/ghdl/ghdl-yosys-plugin.git
+
+# Build ghdl-yosys-plugin
+WORKDIR /build/ghdl-yosys-plugin
+RUN make GHDL=/opt/ghdl/bin/ghdl && \
+    mkdir -p /opt/ghdl/lib/ghdl_yosys && \
+    cp ghdl.so /opt/ghdl/lib/ghdl_yosys/
+
+# Install nextpnr-ecp5 and ecppack
+RUN apt-get update && apt-get install -y \
+    nextpnr-ecp5 \
+    fpga-icestorm \
+    prjtrellis-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set up environment
+ENV PATH="/opt/ghdl/bin:${PATH}"
+ENV YOSYS_GHDL_PLUGIN="/opt/ghdl/lib/ghdl_yosys/ghdl.so"
+
+# Create wrapper script for yosys with plugin
+RUN echo '#!/bin/bash\nyosys -m /opt/ghdl/lib/ghdl_yosys/ghdl.so "$@"' > /usr/local/bin/yosys-ghdl && \
+    chmod +x /usr/local/bin/yosys-ghdl
+
+# Verify installation
+RUN echo "=== GHDL Mcode Patched Build ===" && \
+    ghdl --version && \
+    yosys --version && \
+    echo "GHDL plugin: ${YOSYS_GHDL_PLUGIN}"
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

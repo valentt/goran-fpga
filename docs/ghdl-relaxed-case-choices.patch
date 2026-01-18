@@ -1,0 +1,40 @@
+From: Hans Weber <hans.weber@fpga-agent>
+Date: Sat, 18 Jan 2026 12:00:00 +0100
+Subject: [PATCH] sem_expr: relax locally static requirement for case choices
+
+For synthesis purposes, case statement choices only need to be evaluable
+at elaboration time, not strictly "locally static" as required by the
+VHDL LRM. Many real-world VHDL designs (such as f32c SoC) use function
+calls in case choices that return constant values:
+
+  case addr is
+    when iomap_from(ioaddr_sio) to iomap_to(ioaddr_sio) => ...
+  end case;
+
+This patch extends the existing Flag_Relaxed_Rules to also relax the
+locally static check for case statement choices. The synthesis engine
+(synth-vhdl_stmts.adb) already handles these cases correctly when the
+values evaluate to constants at elaboration time.
+
+The change is minimal: add a check for Flag_Relaxed_Rules before
+emitting the "choice is not locally static" error.
+
+Signed-off-by: Hans Weber <hans.weber@fpga-agent>
+---
+ src/vhdl/vhdl-sem_expr.adb | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/vhdl/vhdl-sem_expr.adb b/src/vhdl/vhdl-sem_expr.adb
+--- a/src/vhdl/vhdl-sem_expr.adb
++++ b/src/vhdl/vhdl-sem_expr.adb
+@@ -3089,6 +3089,7 @@ package body Vhdl.Sem_Expr is
+               Choice_Staticness := Get_Choice_Staticness (El);
+               Staticness := Min (Staticness, Choice_Staticness);
+               if Choice_Staticness /= Locally
+                 and then Is_Case_Stmt
++                and then not Flag_Relaxed_Rules
+               then
+                  --  FIXME: explain why
+                  Error_Msg_Sem (+El, "choice is not locally static");
+--
+2.43.0

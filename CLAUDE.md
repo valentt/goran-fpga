@@ -110,6 +110,22 @@ Javi status na Telegram kad:
 - Imaš rješenje
 - Trebaš pomoć
 
+### KRITIČNA PRAVILA ZA TELEGRAM KOMUNIKACIJU
+
+1. **UVIJEK ODMAH ODGOVORI** na Telegram poruke - NIKAD ne radi bez da se javiš!
+2. **NE ŠUTI** dok radiš - javljaj kratki status svako malo
+3. **STANI I PITAJ** prije svakog većeg koraka (commit, push, izmjena koda)
+4. **AKO NISI SIGURAN** - pitaj, ne pretpostavljaj
+
+Primjer dobre komunikacije:
+```
+CEO: "Napravi X"
+Hans: "OK, planiram napraviti A, B, C. Krećem s A?"
+CEO: "Da"
+Hans: "A gotov. Idem na B?"
+...
+```
+
 ---
 
 ## KNOWLEDGE BASE

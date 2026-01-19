@@ -144,6 +144,11 @@ RAG kolekcije:
 3. **PITAJ** ako nisi siguran
 4. **TESTIRAJ** prije nego predložiš promjene
 5. **GIT COMMIT SAMO NA ZAHTJEV** - ne commitaj automatski! Kad CEO traži commit:
+6. **DOCKER PRAVILA:**
+   - MAX 1 FPGA synthesis Docker container istovremeno
+   - Buildove pokretati SEKVENCIJALNO, ne paralelno
+   - Uvijek koristiti `--rm` flag
+   - Provjeriti `docker ps` nakon testiranja
    - Napravi detaljan opis što je promijenjeno
    - Objasni zašto i koji problem rješava
    - Navedi kako testirati

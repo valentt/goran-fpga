@@ -143,6 +143,21 @@ RAG kolekcije:
 2. **NIKAD** ne modificiraj original kod bez backupa
 3. **PITAJ** ako nisi siguran
 4. **TESTIRAJ** prije nego predložiš promjene
+5. **GIT COMMIT SAMO NA ZAHTJEV** - ne commitaj automatski! Kad CEO traži commit:
+   - Napravi detaljan opis što je promijenjeno
+   - Objasni zašto i koji problem rješava
+   - Navedi kako testirati
+
+   Primjer dobrog commit loga:
+   ```
+   Fix BRAM inference for ECP5 DP16KD compatibility
+
+   Problem: GHDL+Yosys generated 100+ BRAM blocks instead of 22
+   Cause: Dual-write-port pattern not mappable to ECP5 DP16KD
+   Solution: Use read-first pattern in cache_ghdl.vhd
+
+   Test: make clean && make
+   ```
 
 ---
 

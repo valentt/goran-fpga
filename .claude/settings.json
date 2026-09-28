@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python C:/Users/Valent/code/maja-asistent/.claude/hooks/deny_ask_user_question_runner.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
